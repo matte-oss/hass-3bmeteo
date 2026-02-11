@@ -1,11 +1,12 @@
 {
-  "domain": "trbmeteo",
+  "domain": "3bmeteo",
   "name": "3BMeteo",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/custom-components/trbmeteo",
+  "documentation": "https://github.com/matte-oss/hass-3bmeteo/",
+  "homeassistant": "2023.9.0",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/custom-components/trbmeteo/issues",
+  "issue_tracker": "https://github.com/matte-oss/hass-3bmeteo/issues",
   "requirements": ["aiohttp>=3.8.0"],
   "version": "1.0.0"
 }
