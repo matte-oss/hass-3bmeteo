@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Final
 
-DOMAIN: Final = "trbmeteo"
+DOMAIN: Final = "3bmeteo"
 DEFAULT_NAME: Final = "3BMeteo"
 
 # API Configuration
@@ -135,3 +135,4 @@ WIND_DIRECTION_MAP: Final[dict[str, float]] = {
     "NNO": 337.5,
     "NNW": 337.5,
 }
+
