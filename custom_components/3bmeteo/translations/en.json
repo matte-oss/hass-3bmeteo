@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "3BMeteo",
+        "description": "Search for your location (e.g., {example})",
+        "data": {
+          "location_search": "Location name"
+        }
+      },
+      "select_location": {
+        "title": "Select Location",
+        "description": "Choose your location from the search results",
+        "data": {
+          "location": "Location"
+        }
+      },
+      "manual": {
+        "title": "Manual Entry",
+        "description": "Enter location ID manually",
+        "data": {
+          "location_id": "Location ID",
+          "sector_id": "Sector ID",
+          "location_name": "Location name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to 3BMeteo API",
+      "invalid_location": "Invalid location ID",
+      "no_results": "No locations found. Try a different search term.",
+      "empty_search": "Please enter a location name to search"
+    },
+    "abort": {
+      "already_configured": "This location is already configured"
+    }
+  }
+}

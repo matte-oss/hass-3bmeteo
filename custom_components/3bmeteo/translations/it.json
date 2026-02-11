@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "3BMeteo",
+        "description": "Cerca la tua località (es. {example})",
+        "data": {
+          "location_search": "Nome località"
+        }
+      },
+      "select_location": {
+        "title": "Seleziona Località",
+        "description": "Scegli la tua località dai risultati della ricerca",
+        "data": {
+          "location": "Località"
+        }
+      },
+      "manual": {
+        "title": "Inserimento Manuale",
+        "description": "Inserisci l'ID della località manualmente",
+        "data": {
+          "location_id": "ID Località",
+          "sector_id": "ID Settore",
+          "location_name": "Nome località"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi all'API di 3BMeteo",
+      "invalid_location": "ID località non valido",
+      "no_results": "Nessuna località trovata. Prova con un termine diverso.",
+      "empty_search": "Inserisci un nome di località da cercare"
+    },
+    "abort": {
+      "already_configured": "Questa località è già configurata"
+    }
+  }
+}
