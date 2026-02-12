@@ -165,11 +165,14 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         """Return the current condition."""
         # Check if we have hourly data with notte field
         hourly = self._current_hourly
-        is_night = False
         if hourly:
             notte = hourly.get("notte")
+            is_night = False
             if notte is not None:
-                is_night = bool(int(notte))
+                try:
+                    is_night = int(notte) == 1
+                except (ValueError, TypeError):
+                    pass
             # Try to get symbol from hourly data
             symbol_id = hourly.get("id_simbolo")
             if symbol_id:
@@ -181,7 +184,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
         
-        # Fallback to daily forecast
+        # Fallback to daily forecast (don't use nighttime flag for daily forecast)
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -189,8 +192,8 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             if symbol_id:
                 try:
                     symbol_int = int(symbol_id)
-                    condition = self._get_condition(symbol_int, is_night)
-                    _LOGGER.debug("Current condition: symbol %s (night=%s) mapped to %s", symbol_id, is_night, condition)
+                    condition = self._get_condition(symbol_int, is_night=False)
+                    _LOGGER.debug("Current condition: symbol %s mapped to %s", symbol_id, condition)
                     return condition
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
@@ -404,7 +407,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 notte = hourly.get("notte")
                 if notte is not None:
                     try:
-                        is_night = bool(int(notte))
+                        is_night = int(notte) == 1
                     except (ValueError, TypeError):
                         pass
                 
