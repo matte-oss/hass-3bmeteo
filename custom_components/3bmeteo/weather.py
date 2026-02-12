@@ -157,9 +157,12 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             symbol_id = tempo.get("id_simbolo")
             if symbol_id:
                 try:
-                    return self._get_condition(int(symbol_id))
-                except (ValueError, TypeError):
-                    pass
+                    symbol_int = int(symbol_id)
+                    condition = self._get_condition(symbol_int)
+                    _LOGGER.debug("Current condition: symbol %s mapped to %s", symbol_id, condition)
+                    return condition
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
         return None
 
     @property
@@ -305,10 +308,14 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             vento = tempo.get("vento", {})
             symbol_id = tempo.get("id_simbolo")
             
-            try:
-                condition = self._get_condition(int(symbol_id)) if symbol_id else None
-            except (ValueError, TypeError):
-                condition = None
+            condition = None
+            if symbol_id:
+                try:
+                    symbol_int = int(symbol_id)
+                    condition = self._get_condition(symbol_int)
+                    _LOGGER.debug("Daily forecast for %s: symbol %s mapped to %s", data, symbol_id, condition)
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Failed to convert symbol_id '%s' to int for date %s: %s", symbol_id, data, e)
 
             forecast: Forecast = {
                 ATTR_FORECAST_TIME: f"{data}T00:00:00",
@@ -361,10 +368,14 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 vento = hourly.get("vento", {})
                 symbol_id = hourly.get("id_simbolo")
                 
-                try:
-                    condition = self._get_condition(int(symbol_id)) if symbol_id else None
-                except (ValueError, TypeError):
-                    condition = None
+                condition = None
+                if symbol_id:
+                    try:
+                        symbol_int = int(symbol_id)
+                        condition = self._get_condition(symbol_int)
+                        _LOGGER.debug("Hourly forecast for %s %02d:00: symbol %s mapped to %s", date_str, ora, symbol_id, condition)
+                    except (ValueError, TypeError) as e:
+                        _LOGGER.warning("Failed to convert symbol_id '%s' to int for %s %02d:00: %s", symbol_id, date_str, ora, e)
 
                 forecast: Forecast = {
                     ATTR_FORECAST_TIME: f"{date_str}T{ora:02d}:00:00",
