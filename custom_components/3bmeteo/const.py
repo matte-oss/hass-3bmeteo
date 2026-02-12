@@ -31,7 +31,7 @@ CONDITION_MAP: Final[dict[int, str]] = {
     8: "rainy",  # pioggia debole e schiarite
     9: "lightning-rainy",  # nubi sparse e temporali
     10: "lightning-rainy",  # possibili temporali
-    11: "lightning-rainy",  # MISSING - likely temporali variant
+    11: "lightning-rainy",  # temporale forte e schiarite
     12: "cloudy",  # nuvoloso
     13: "snowy",  # nubi sparse e neve
     14: "partlycloudy",  # velature lievi
@@ -99,6 +99,7 @@ WIND_DIRECTION_MAP: Final[dict[str, float]] = {
     "NNO": 337.5,
     "NNW": 337.5,
 }
+
 
 
 
