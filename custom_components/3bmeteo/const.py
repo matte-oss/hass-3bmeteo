@@ -21,92 +21,56 @@ UPDATE_INTERVAL: Final = 30
 # Weather symbol ID to Home Assistant condition mapping
 # Based on 3bmeteo symbol IDs observed in the API response
 CONDITION_MAP: Final[dict[int, str]] = {
-    # Clear/Sunny conditions
-    1: "sunny",
-    2: "sunny",
+    1: "sunny",  # sereno
+    2: "sunny",  # MISSING - likely "sereno" variant
     3: "partlycloudy",  # poco nuvoloso
-    4: "rainy",
-    5: "sunny",
+    4: "partlycloudy",  # nubi sparse
+    5: "lightning-rainy",  # possibili temporali
     6: "partlycloudy",  # velature sparse
-    7: "cloudy",  # nubi sparse
-    8: "rainy",  # pioggia e schiarite
-    9: "rainy",
-    10: "rainy",
-    11: "cloudy",
-    12: "cloudy",
-    13: "cloudy",
-    14: "cloudy",
-    15: "cloudy",  # nuvoloso
-    16: "cloudy",
-    17: "cloudy",
-    18: "cloudy",
-    19: "rainy",
-    20: "rainy",
-    21: "rainy",
-    22: "rainy",
-    23: "pouring",  # pioggia intensa
-    24: "pouring",
-    25: "pouring",
-    26: "pouring",
-    27: "lightning-rainy",
+    7: "partlycloudy",  # nubi sparse
+    8: "rainy",  # pioggia debole e schiarite
+    9: "lightning-rainy",  # nubi sparse e temporali
+    10: "lightning-rainy",  # possibili temporali
+    11: "lightning-rainy",  # MISSING - likely temporali variant
+    12: "cloudy",  # nuvoloso
+    13: "snowy",  # nubi sparse e neve
+    14: "partlycloudy",  # velature lievi
+    15: "partlycloudy",  # velature estese
+    16: "cloudy",  # coperto per nubi alte
+    17: "cloudy",  # coperto
+    18: "exceptional",  # gelicidio (freezing rain/ice)
+    19: "rainy",  # pioviggine
+    20: "rainy",  # pioggia debole
+    21: "rainy",  # pioggia debole
+    22: "rainy",  # MISSING - likely pioggia variant
+    23: "rainy",  # pioggia
+    24: "pouring",  # pioggia forte
+    25: "pouring",  # pioggia molto forte
+    26: "rainy",  # rovesci di pioggia
+    27: "lightning-rainy",  # temporale forte
     28: "lightning-rainy",  # temporale
-    29: "lightning-rainy",
-    30: "snowy",
-    31: "snowy",
-    32: "snowy",
-    33: "snowy",
-    34: "snowy",
-    35: "snowy-rainy",
-    36: "snowy-rainy",
-    37: "snowy-rainy",
+    29: "hail",  # temporale con grandine ✓ FOUND!
+    30: "hail",  # MISSING - likely grandine forte or similar
+    31: "snowy-rainy",  # pioggia e neve
+    32: "snowy-rainy",  # nevischio
+    33: "snowy",  # neve debole
+    34: "snowy",  # neve
+    35: "snowy",  # neve
+    36: "snowy",  # neve forte
+    37: "snowy",  # MISSING - likely neve variant
     38: "partlycloudy",  # nubi basse e schiarite
-    39: "hail",
-    40: "fog",
-    41: "fog",
-    42: "fog",
+    39: "cloudy",  # nubi basse
+    40: "fog",  # nebbia a banchi
+    41: "fog",  # nebbia
+    42: "fog",  # MISSING - likely nebbia variant
     43: "partlycloudy",  # parz nuvoloso
-    44: "partlycloudy",
+    44: "fog",  # foschia
     45: "rainy",  # nubi sparse e rovesci
-    46: "rainy",
-    47: "rainy",
-    48: "rainy",
-    49: "rainy",
-    50: "rainy",
-    51: "partlycloudy",
-    52: "cloudy",
-    53: "cloudy",
-    54: "cloudy",
-    55: "cloudy",
-    56: "cloudy",
-    57: "cloudy",
-    58: "cloudy",
-    59: "cloudy",
-    60: "rainy",
-    61: "rainy",
-    62: "rainy",
-    63: "rainy",
-    64: "rainy",
-    65: "rainy",
-    66: "rainy",
-    67: "rainy",
-    68: "rainy",
-    69: "rainy",
-    70: "pouring",
-    71: "pouring",
-    72: "pouring",
-    73: "pouring",
-    74: "pouring",
-    75: "pouring",
-    76: "lightning-rainy",
-    77: "lightning-rainy",
-    78: "lightning-rainy",
-    79: "lightning-rainy",
-    80: "rainy",
-    81: "rainy",  # pioggia debole e schiarite
-    82: "rainy",
-    83: "rainy",
-    84: "rainy",
-    85: "rainy",
+    46: "pouring",  # MISSING - likely rovesci forti
+    47: "snowy",  # rovesci di neve
+    48: "snowy-rainy",  # pioggia e neve
+    49: "partlycloudy",  # MISSING - likely transition condition
+    50: "sunny",  # sereno
 }
 
 # Wind direction mapping
@@ -135,5 +99,6 @@ WIND_DIRECTION_MAP: Final[dict[str, float]] = {
     "NNO": 337.5,
     "NNW": 337.5,
 }
+
 
 
