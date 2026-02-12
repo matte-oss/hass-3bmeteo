@@ -154,6 +154,22 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             return "clear-night"
         return condition
 
+    def _is_night(self, notte_value: int | str | None) -> bool:
+        """Check if notte field indicates nighttime.
+        
+        Args:
+            notte_value: The notte field value from API (1 = night, 0 = day)
+            
+        Returns:
+            True if it's nighttime, False otherwise
+        """
+        if notte_value is None:
+            return False
+        try:
+            return int(notte_value) == 1
+        except (ValueError, TypeError):
+            return False
+
     def _get_wind_bearing(self, direction: str | None) -> float | None:
         """Convert wind direction string to bearing."""
         if direction is None:
@@ -166,13 +182,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         # Check if we have hourly data with notte field
         hourly = self._current_hourly
         if hourly:
-            notte = hourly.get("notte")
-            is_night = False
-            if notte is not None:
-                try:
-                    is_night = int(notte) == 1
-                except (ValueError, TypeError):
-                    pass
+            is_night = self._is_night(hourly.get("notte"))
             # Try to get symbol from hourly data
             symbol_id = hourly.get("id_simbolo")
             if symbol_id:
@@ -403,13 +413,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 symbol_id = hourly.get("id_simbolo")
                 
                 # Check if it's nighttime
-                is_night = False
-                notte = hourly.get("notte")
-                if notte is not None:
-                    try:
-                        is_night = int(notte) == 1
-                    except (ValueError, TypeError):
-                        pass
+                is_night = self._is_night(hourly.get("notte"))
                 
                 condition = None
                 if symbol_id:
