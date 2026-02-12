@@ -149,7 +149,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         if symbol_id is None:
             return None
         condition = CONDITION_MAP.get(symbol_id, "cloudy")
-        # Map sunny to clear-night during nighttime
+        # Return clear-night condition for clear skies during nighttime
         if condition == "sunny" and is_night:
             return "clear-night"
         return condition
@@ -194,7 +194,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
         
-        # Fallback to daily forecast (don't use nighttime flag for daily forecast)
+        # Fallback to daily forecast (do not use nighttime flag for daily forecast)
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
