@@ -22,7 +22,7 @@ UPDATE_INTERVAL: Final = 30
 # Based on 3bmeteo symbol IDs observed in the API response
 CONDITION_MAP: Final[dict[int, str]] = {
     1: "sunny",  # sereno
-    2: "sunny",  # MISSING - likely "sereno" variant
+    2: "sunny",  # MISSING - sereno (variant)
     3: "partlycloudy",  # poco nuvoloso
     4: "partlycloudy",  # nubi sparse
     5: "lightning-rainy",  # possibili temporali
@@ -31,7 +31,7 @@ CONDITION_MAP: Final[dict[int, str]] = {
     8: "rainy",  # pioggia debole e schiarite
     9: "lightning-rainy",  # nubi sparse e temporali
     10: "lightning-rainy",  # possibili temporali
-    11: "lightning-rainy",  # MISSING - likely temporali variant
+    11: "lightning-rainy",  # MISSING - temporale forte e schiarite
     12: "cloudy",  # nuvoloso
     13: "snowy",  # nubi sparse e neve
     14: "partlycloudy",  # velature lievi
@@ -42,7 +42,7 @@ CONDITION_MAP: Final[dict[int, str]] = {
     19: "rainy",  # pioviggine
     20: "rainy",  # pioggia debole
     21: "rainy",  # pioggia debole
-    22: "rainy",  # MISSING - likely pioggia variant
+    22: "rainy",  # MISSING - pioggia (variant)
     23: "rainy",  # pioggia
     24: "pouring",  # pioggia forte
     25: "pouring",  # pioggia molto forte
@@ -50,26 +50,26 @@ CONDITION_MAP: Final[dict[int, str]] = {
     27: "lightning-rainy",  # temporale forte
     28: "lightning-rainy",  # temporale
     29: "hail",  # temporale con grandine ✓ FOUND!
-    30: "hail",  # MISSING - likely grandine forte or similar
+    30: "snowy",  # MISSING - temporale di neve
     31: "snowy-rainy",  # pioggia e neve
     32: "snowy-rainy",  # nevischio
     33: "snowy",  # neve debole
     34: "snowy",  # neve
     35: "snowy",  # neve
     36: "snowy",  # neve forte
-    37: "snowy",  # MISSING - likely neve variant
+    37: "snowy",  # MISSING - neve (variant)
     38: "partlycloudy",  # nubi basse e schiarite
     39: "cloudy",  # nubi basse
     40: "fog",  # nebbia a banchi
     41: "fog",  # nebbia
-    42: "fog",  # MISSING - likely nebbia variant
+    42: "fog",  # MISSING - nebbia (variant)
     43: "partlycloudy",  # parz nuvoloso
     44: "fog",  # foschia
     45: "rainy",  # nubi sparse e rovesci
-    46: "pouring",  # MISSING - likely rovesci forti
+    46: "pouring",  # MISSING - rovesci forti
     47: "snowy",  # rovesci di neve
     48: "snowy-rainy",  # pioggia e neve
-    49: "partlycloudy",  # MISSING - likely transition condition
+    49: "partlycloudy",  # MISSING - parzialmente nuvoloso (variant)
     50: "sunny",  # sereno
 }
 
