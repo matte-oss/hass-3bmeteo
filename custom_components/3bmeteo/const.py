@@ -59,7 +59,7 @@ CONDITION_MAP: Final[dict[int, str]] = {
     35: "snowy-rainy",
     36: "snowy-rainy",
     37: "snowy-rainy",
-    38: "hail",
+    38: "partlycloudy",  # nubi basse e schiarite
     39: "hail",
     40: "fog",
     41: "fog",
@@ -135,4 +135,5 @@ WIND_DIRECTION_MAP: Final[dict[str, float]] = {
     "NNO": 337.5,
     "NNW": 337.5,
 }
+
 
