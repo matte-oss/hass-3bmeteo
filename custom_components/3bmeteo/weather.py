@@ -136,11 +136,39 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 return hourly[0]
         return None
 
-    def _get_condition(self, symbol_id: int | None) -> str | None:
-        """Map 3bmeteo symbol ID to Home Assistant condition."""
+    def _get_condition(self, symbol_id: int | None, is_night: bool = False) -> str | None:
+        """Map 3bmeteo symbol ID to Home Assistant condition.
+        
+        Args:
+            symbol_id: The 3BMeteo weather symbol ID
+            is_night: Whether it's nighttime (default: False)
+            
+        Returns:
+            Home Assistant weather condition string
+        """
         if symbol_id is None:
             return None
-        return CONDITION_MAP.get(symbol_id, "cloudy")
+        condition = CONDITION_MAP.get(symbol_id, "cloudy")
+        # Return clear-night condition for clear skies during nighttime
+        if condition == "sunny" and is_night:
+            return "clear-night"
+        return condition
+
+    def _is_night(self, notte_value: int | str | None) -> bool:
+        """Check if notte field indicates nighttime.
+        
+        Args:
+            notte_value: The notte field value from API (1 = night, 0 = day)
+            
+        Returns:
+            True if it's nighttime, False otherwise
+        """
+        if notte_value is None:
+            return False
+        try:
+            return int(notte_value) == 1
+        except (ValueError, TypeError):
+            return False
 
     def _get_wind_bearing(self, direction: str | None) -> float | None:
         """Convert wind direction string to bearing."""
@@ -151,6 +179,22 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
     @property
     def condition(self) -> str | None:
         """Return the current condition."""
+        # Check if we have hourly data with notte field
+        hourly = self._current_hourly
+        if hourly:
+            is_night = self._is_night(hourly.get("notte"))
+            # Try to get symbol from hourly data
+            symbol_id = hourly.get("id_simbolo")
+            if symbol_id:
+                try:
+                    symbol_int = int(symbol_id)
+                    condition = self._get_condition(symbol_int, is_night)
+                    _LOGGER.debug("Current condition: symbol %s (night=%s) mapped to %s", symbol_id, is_night, condition)
+                    return condition
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
+        
+        # Fallback to daily forecast (do not use nighttime flag for daily forecast)
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -158,7 +202,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             if symbol_id:
                 try:
                     symbol_int = int(symbol_id)
-                    condition = self._get_condition(symbol_int)
+                    condition = self._get_condition(symbol_int, is_night=False)
                     _LOGGER.debug("Current condition: symbol %s mapped to %s", symbol_id, condition)
                     return condition
                 except (ValueError, TypeError) as e:
@@ -368,12 +412,15 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 vento = hourly.get("vento", {})
                 symbol_id = hourly.get("id_simbolo")
                 
+                # Check if it's nighttime
+                is_night = self._is_night(hourly.get("notte"))
+                
                 condition = None
                 if symbol_id:
                     try:
                         symbol_int = int(symbol_id)
-                        condition = self._get_condition(symbol_int)
-                        _LOGGER.debug("Hourly forecast for %s %02d:00: symbol %s mapped to %s", date_str, ora, symbol_id, condition)
+                        condition = self._get_condition(symbol_int, is_night)
+                        _LOGGER.debug("Hourly forecast for %s %02d:00: symbol %s (night=%s) mapped to %s", date_str, ora, symbol_id, is_night, condition)
                     except (ValueError, TypeError) as e:
                         _LOGGER.warning("Failed to convert symbol_id '%s' to int for %s %02d:00: %s", symbol_id, date_str, ora, e)
 
