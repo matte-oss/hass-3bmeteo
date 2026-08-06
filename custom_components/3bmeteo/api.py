@@ -58,10 +58,12 @@ class TrBMeteoApiClient:
                         f"API request failed with status {response.status}"
                     )
                 return await response.json()
+        except TimeoutError as err:
+            raise TrBMeteoApiError(f"Timeout connecting to API: {err}") from err
         except aiohttp.ClientError as err:
             raise TrBMeteoApiError(f"Error connecting to API: {err}") from err
-        except Exception as err:
-            raise TrBMeteoApiError(f"Unexpected error: {err}") from err
+        except ValueError as err:
+            raise TrBMeteoApiError(f"Malformed JSON from API: {err}") from err
 
     async def get_weather(
         self, location_id: int, sector_id: int, language: str = "it"
