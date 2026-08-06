@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -123,7 +124,8 @@ class TrBMeteoApiClient:
         """
         # Endpoint: /mobilev3/api_localita/ricerca_elastic_search/{query}/{lang}/{country}/offset/limit
         data = await self._request(
-            f"mobilev3/api_localita/ricerca_elastic_search/{query}/{language}/it/0/20"
+            f"mobilev3/api_localita/ricerca_elastic_search/"
+            f"{quote(query, safe='')}/{language}/it/0/20"
         )
 
         # Response format: {"localita": [...]}
