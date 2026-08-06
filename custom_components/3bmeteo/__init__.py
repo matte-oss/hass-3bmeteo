@@ -30,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = TrBMeteoDataUpdateCoordinator(
         hass,
+        entry,
         client,
         location_id,
         sector_id,
