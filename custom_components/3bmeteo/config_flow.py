@@ -34,29 +34,37 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial step."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["search", "manual"],
+        )
+
+    async def async_step_search(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle location search by name."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             search_query = user_input.get("location_search", "").strip()
-            
+
             if search_query:
                 session = async_get_clientsession(self.hass)
                 client = TrBMeteoApiClient(session)
-                
+
                 try:
                     locations = await client.search_location(search_query)
                     if locations:
                         self._locations = locations
                         return await self.async_step_select_location()
-                    else:
-                        errors["base"] = "no_results"
+                    errors["base"] = "no_results"
                 except TrBMeteoApiError:
                     errors["base"] = "cannot_connect"
             else:
                 errors["base"] = "empty_search"
 
         return self.async_show_form(
-            step_id="user",
+            step_id="search",
             data_schema=vol.Schema(
                 {
                     vol.Required("location_search"): str,

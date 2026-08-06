@@ -3,6 +3,14 @@
     "step": {
       "user": {
         "title": "3BMeteo",
+        "description": "How do you want to pick your location?",
+        "menu_options": {
+          "search": "Search by name",
+          "manual": "Enter location ID manually"
+        }
+      },
+      "search": {
+        "title": "Search location",
         "description": "Search for your location (e.g., {example})",
         "data": {
           "location_search": "Location name"
