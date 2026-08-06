@@ -171,7 +171,15 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         """
         if symbol_id is None:
             return None
-        condition = CONDITION_MAP.get(symbol_id, "cloudy")
+        condition = CONDITION_MAP.get(symbol_id)
+        if condition is None:
+            # Reporting an unmapped symbol as "cloudy" invents a forecast.
+            # Leave it unset so the UI shows unknown instead.
+            _LOGGER.warning(
+                "Unmapped 3BMeteo weather symbol %s, please report it upstream",
+                symbol_id,
+            )
+            return None
         # Return clear-night condition for clear skies during nighttime
         if condition == "sunny" and is_night:
             return "clear-night"
