@@ -275,7 +275,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         """Return the apparent/feels-like temperature."""
         hourly = self._current_hourly
         if hourly:
-            return hourly.get("tpercepita") or hourly.get("windchill")
+            apparent = hourly.get("tpercepita")
+            if apparent is None:
+                apparent = hourly.get("windchill")
+            return apparent
         return None
 
     @property
