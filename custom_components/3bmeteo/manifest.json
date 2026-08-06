@@ -7,8 +7,8 @@
   "homeassistant": "2023.9.0",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/matte-oss/hass-3bmeteo/issues",
-  "requirements": ["aiohttp>=3.8.0"],
-  "version": "1.0.3"
+  "requirements": [],
+  "version": "1.0.4"
 }
 
 
