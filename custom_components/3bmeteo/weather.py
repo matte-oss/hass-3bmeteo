@@ -199,15 +199,15 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             return None
         return WIND_DIRECTION_MAP.get(direction.upper())
 
-    def _forecast_datetime(self, date_str: str, hour: int = 0) -> str | None:
-        """Build a timezone-aware ISO 8601 timestamp for a forecast entry.
+    def _forecast_datetime(self, date_str: str, hour: int = 0) -> datetime | None:
+        """Build a timezone-aware datetime for a forecast entry.
 
         Args:
             date_str: Date as reported by the API (YYYY-MM-DD)
             hour: Hour of the day in the location's local time
 
         Returns:
-            ISO 8601 timestamp with UTC offset, or None if the date is unusable
+            Timezone-aware datetime, or None if the date is unusable
         """
         date = dt_util.parse_date(date_str)
         if date is None:
@@ -215,7 +215,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             return None
         return datetime(
             date.year, date.month, date.day, hour, tzinfo=self._location_timezone
-        ).isoformat()
+        )
 
     @property
     def condition(self) -> str | None:
@@ -407,7 +407,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int for date %s: %s", symbol_id, data, e)
 
             forecast: Forecast = {
-                ATTR_FORECAST_TIME: forecast_time,
+                ATTR_FORECAST_TIME: forecast_time.isoformat(),
                 ATTR_FORECAST_CONDITION: condition,
                 ATTR_FORECAST_NATIVE_TEMP: tempo.get("t_max"),
                 ATTR_FORECAST_NATIVE_TEMP_LOW: tempo.get("t_min"),
@@ -436,8 +436,14 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
         # Get hourly forecasts from the dedicated hourly endpoint
         hourly_days = self.coordinator.data.get("hourly_forecast", [])
-        
+
         result: list[Forecast] = []
+
+        # The API returns whole days, including hours that have already passed.
+        # Home Assistant expects a forward-looking forecast, so drop those.
+        current_hour = dt_util.now(self._location_timezone).replace(
+            minute=0, second=0, microsecond=0
+        )
 
         for day_data in hourly_days:
             date_str = day_data.get("data", "")
@@ -449,7 +455,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     continue
 
                 forecast_time = self._forecast_datetime(date_str, ora)
-                if forecast_time is None:
+                if forecast_time is None or forecast_time < current_hour:
                     continue
 
                 temp_data = hourly.get("temperatura", {})
@@ -474,7 +480,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                         _LOGGER.warning("Failed to convert symbol_id '%s' to int for %s %02d:00: %s", symbol_id, date_str, ora, e)
 
                 forecast: Forecast = {
-                    ATTR_FORECAST_TIME: forecast_time,
+                    ATTR_FORECAST_TIME: forecast_time.isoformat(),
                     ATTR_FORECAST_CONDITION: condition,
                     ATTR_FORECAST_NATIVE_TEMP: temperature,
                     ATTR_FORECAST_PRECIPITATION_PROBABILITY: hourly.get("probabilita_prec"),
