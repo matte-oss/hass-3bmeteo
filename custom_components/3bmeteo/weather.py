@@ -129,36 +129,34 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
     @property
     def _current_hourly(self) -> dict[str, Any] | None:
-        """Return current hourly data."""
-        from datetime import datetime
-        
+        """Return the hourly entry closest to the current time."""
         if not self.coordinator.data:
             return None
-            
+
         # Try to get hourly data from the dedicated hourly endpoint
         hourly_days = self.coordinator.data.get("hourly_forecast", [])
         if hourly_days:
-            now = datetime.now()
+            now = dt_util.now(self._location_timezone)
             current_date = now.strftime("%Y-%m-%d")
-            current_hour = now.hour
-            
+
             for day_data in hourly_days:
-                if day_data.get("data") == current_date:
-                    hourly_list = day_data.get("previsione_oraria", [])
-                    # Find the closest hour
-                    for hourly in hourly_list:
-                        if hourly.get("ora") == current_hour:
-                            return hourly
-                    # If exact hour not found, return the first one from today
-                    if hourly_list:
-                        return hourly_list[0]
-        
-        # Fallback to old method
+                if day_data.get("data") != current_date:
+                    continue
+
+                hourly_list = [
+                    hourly
+                    for hourly in day_data.get("previsione_oraria", [])
+                    if isinstance(hourly.get("ora"), int)
+                ]
+                if hourly_list:
+                    # Pick the nearest hour instead of assuming the exact one is
+                    # present: the API may drop hours that have already elapsed.
+                    return min(hourly_list, key=lambda h: abs(h["ora"] - now.hour))
+
+        # Fallback to the hourly data embedded in the daily forecast
         forecast = self._current_forecast
-        if forecast and "previsione_oraria" in forecast:
-            hourly = forecast["previsione_oraria"]
-            if hourly:
-                return hourly[0]
+        if forecast and (hourly := forecast.get("previsione_oraria")):
+            return hourly[0]
         return None
 
     def _get_condition(self, symbol_id: int | None, is_night: bool = False) -> str | None:
