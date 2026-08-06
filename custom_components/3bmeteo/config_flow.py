@@ -86,13 +86,13 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected_idx = int(user_input["location"])
             selected = self._locations[selected_idx]
-            
+
             location_id = selected.get("id")
             sector_id = selected.get("id_settore", selected.get("id_macrosettore", 1))
             location_name = selected.get("localita", selected.get("nome", "Unknown"))
             province = selected.get("prov", "")
             timezone = selected.get("timezone")
-            
+
             if province:
                 full_name = f"{location_name} ({province})"
             else:
@@ -129,14 +129,14 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             name = loc.get("localita", loc.get("nome", "Unknown"))
             province = loc.get("prov", "")
             region = loc.get("regione", "")
-            
+
             if province and region:
                 label = f"{name} ({province}) - {region}"
             elif province:
                 label = f"{name} ({province})"
             else:
                 label = name
-            
+
             location_options[str(idx)] = label
 
         return self.async_show_form(

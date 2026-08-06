@@ -50,7 +50,7 @@ CONDITION_MAP: Final[dict[int, str]] = {
     26: "rainy",  # rovesci di pioggia
     27: "lightning-rainy",  # temporale forte
     28: "lightning-rainy",  # temporale
-    29: "hail",  # temporale con grandine 
+    29: "hail",  # temporale con grandine
     30: "snowy",  # temporale di neve
     31: "snowy-rainy",  # pioggia e neve
     32: "snowy-rainy",  # nevischio

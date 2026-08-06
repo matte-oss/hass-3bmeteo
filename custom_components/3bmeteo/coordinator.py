@@ -62,7 +62,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             daily_data = await self._client.get_weather(self._location_id, self._sector_id)
             if "localita" not in daily_data:
                 raise UpdateFailed("Invalid response from API: missing localita")
-            
+
             # Fetch hourly forecast (2 days)
             try:
                 hourly_data = await self._client.get_hourly_forecast(
@@ -74,7 +74,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except TrBMeteoApiError as err:
                 _LOGGER.warning("Failed to fetch hourly forecast: %s", err)
                 daily_data["hourly_forecast"] = []
-            
+
             return daily_data
         except TrBMeteoApiError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err

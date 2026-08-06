@@ -163,11 +163,11 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
     def _get_condition(self, symbol_id: int | None, is_night: bool = False) -> str | None:
         """Map 3bmeteo symbol ID to Home Assistant condition.
-        
+
         Args:
             symbol_id: The 3BMeteo weather symbol ID
             is_night: Whether it's nighttime (default: False)
-            
+
         Returns:
             Home Assistant weather condition string
         """
@@ -189,10 +189,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
     def _is_night(self, notte_value: int | str | None) -> bool:
         """Check if notte field indicates nighttime.
-        
+
         Args:
             notte_value: The notte field value from API (1 = night, 0 = day)
-            
+
         Returns:
             True if it's nighttime, False otherwise
         """
@@ -244,7 +244,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     return condition
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
-        
+
         # Fallback to daily forecast (do not use nighttime flag for daily forecast)
         forecast = self._current_forecast
         if forecast:
@@ -269,7 +269,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             if isinstance(temp_data, dict):
                 return temp_data.get("gradi")
             return temp_data
-        
+
         # Fallback to average of min/max
         forecast = self._current_forecast
         if forecast:
@@ -302,7 +302,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     return int(hr)
                 except (ValueError, TypeError):
                     pass
-        
+
         # Fallback to daily
         forecast = self._current_forecast
         if forecast:
@@ -316,7 +316,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         hourly = self._current_hourly
         if hourly:
             return hourly.get("pr")
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -336,7 +336,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                         return float(intensita)
                     except (ValueError, TypeError):
                         pass
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -358,7 +358,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             vento = hourly.get("vento", {})
             if vento:
                 return self._get_wind_bearing(vento.get("direzione"))
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -373,7 +373,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         hourly = self._current_hourly
         if hourly:
             return hourly.get("raffica")
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -390,7 +390,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         location = self._location_data
         if not location:
             return None
-        
+
         forecasts = location.get("previsione_giorno", [])
         if not forecasts:
             return None
@@ -399,7 +399,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         for day_forecast in forecasts:
             tempo = day_forecast.get("tempo_medio", {})
             data = day_forecast.get("data")
-            
+
             if not data:
                 continue
 
@@ -461,7 +461,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         for day_data in hourly_days:
             date_str = day_data.get("data", "")
             hourly_list = day_data.get("previsione_oraria", [])
-            
+
             for hourly in hourly_list:
                 ora = hourly.get("ora")
                 if ora is None:
@@ -479,10 +479,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
                 vento = hourly.get("vento", {})
                 symbol_id = hourly.get("id_simbolo")
-                
+
                 # Check if it's nighttime
                 is_night = self._is_night(hourly.get("notte"))
-                
+
                 condition = None
                 if symbol_id:
                     try:
