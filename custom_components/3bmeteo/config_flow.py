@@ -15,6 +15,7 @@ from .const import (
     CONF_LOCATION_ID,
     CONF_LOCATION_NAME,
     CONF_SECTOR_ID,
+    CONF_TIMEZONE,
     DOMAIN,
 )
 
@@ -90,6 +91,7 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             sector_id = selected.get("id_settore", selected.get("id_macrosettore", 1))
             location_name = selected.get("localita", selected.get("nome", "Unknown"))
             province = selected.get("prov", "")
+            timezone = selected.get("timezone")
             
             if province:
                 full_name = f"{location_name} ({province})"
@@ -115,6 +117,7 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_LOCATION_ID: location_id,
                             CONF_SECTOR_ID: sector_id,
                             CONF_LOCATION_NAME: full_name,
+                            CONF_TIMEZONE: timezone,
                         },
                     )
             except TrBMeteoApiError:

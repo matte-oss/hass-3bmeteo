@@ -14,6 +14,7 @@ API_KEY: Final = "TVIBVd7cmCagdU3uob6Mof1hI9yM48scSSYZVrnw"
 CONF_LOCATION_ID: Final = "location_id"
 CONF_LOCATION_NAME: Final = "location_name"
 CONF_SECTOR_ID: Final = "sector_id"
+CONF_TIMEZONE: Final = "timezone"
 
 # Update interval in minutes
 UPDATE_INTERVAL: Final = 30

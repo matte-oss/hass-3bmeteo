@@ -1,7 +1,7 @@
 """Weather platform for 3BMeteo integration."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, tzinfo
 import logging
 from typing import Any
 
@@ -28,11 +28,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONDITION_MAP,
     CONF_LOCATION_ID,
     CONF_LOCATION_NAME,
+    CONF_TIMEZONE,
     DOMAIN,
     WIND_DIRECTION_MAP,
 )
@@ -48,8 +50,29 @@ async def async_setup_entry(
 ) -> None:
     """Set up 3BMeteo weather platform."""
     coordinator: TrBMeteoDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    
-    async_add_entities([TrBMeteoWeatherEntity(coordinator, config_entry)])
+
+    # 3BMeteo reports forecast times in the location's own local time. Resolve
+    # that zone once here; fall back to the Home Assistant zone when the API
+    # did not report one (e.g. entries created through manual entry).
+    location_timezone: tzinfo | None = None
+    if tz_name := config_entry.data.get(CONF_TIMEZONE):
+        location_timezone = await dt_util.async_get_time_zone(tz_name)
+        if location_timezone is None:
+            _LOGGER.warning(
+                "Unknown timezone %s for %s, falling back to the Home Assistant timezone",
+                tz_name,
+                config_entry.data.get(CONF_LOCATION_NAME),
+            )
+
+    async_add_entities(
+        [
+            TrBMeteoWeatherEntity(
+                coordinator,
+                config_entry,
+                location_timezone or dt_util.get_default_time_zone(),
+            )
+        ]
+    )
 
 
 class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], WeatherEntity):
@@ -68,14 +91,16 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         self,
         coordinator: TrBMeteoDataUpdateCoordinator,
         config_entry: ConfigEntry,
+        location_timezone: tzinfo,
     ) -> None:
         """Initialize the weather entity."""
         super().__init__(coordinator)
-        
+
         self._config_entry = config_entry
         self._location_id = config_entry.data[CONF_LOCATION_ID]
         self._location_name = config_entry.data[CONF_LOCATION_NAME]
-        
+        self._location_timezone = location_timezone
+
         self._attr_unique_id = f"{DOMAIN}_{self._location_id}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._location_id))},
@@ -175,6 +200,24 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         if direction is None:
             return None
         return WIND_DIRECTION_MAP.get(direction.upper())
+
+    def _forecast_datetime(self, date_str: str, hour: int = 0) -> str | None:
+        """Build a timezone-aware ISO 8601 timestamp for a forecast entry.
+
+        Args:
+            date_str: Date as reported by the API (YYYY-MM-DD)
+            hour: Hour of the day in the location's local time
+
+        Returns:
+            ISO 8601 timestamp with UTC offset, or None if the date is unusable
+        """
+        date = dt_util.parse_date(date_str)
+        if date is None:
+            _LOGGER.warning("Unparsable forecast date from API: %s", date_str)
+            return None
+        return datetime(
+            date.year, date.month, date.day, hour, tzinfo=self._location_timezone
+        ).isoformat()
 
     @property
     def condition(self) -> str | None:
@@ -349,9 +392,13 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             if not data:
                 continue
 
+            forecast_time = self._forecast_datetime(data)
+            if forecast_time is None:
+                continue
+
             vento = tempo.get("vento", {})
             symbol_id = tempo.get("id_simbolo")
-            
+
             condition = None
             if symbol_id:
                 try:
@@ -362,7 +409,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int for date %s: %s", symbol_id, data, e)
 
             forecast: Forecast = {
-                ATTR_FORECAST_TIME: f"{data}T00:00:00",
+                ATTR_FORECAST_TIME: forecast_time,
                 ATTR_FORECAST_CONDITION: condition,
                 ATTR_FORECAST_NATIVE_TEMP: tempo.get("t_max"),
                 ATTR_FORECAST_NATIVE_TEMP_LOW: tempo.get("t_min"),
@@ -403,6 +450,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 if ora is None:
                     continue
 
+                forecast_time = self._forecast_datetime(date_str, ora)
+                if forecast_time is None:
+                    continue
+
                 temp_data = hourly.get("temperatura", {})
                 if isinstance(temp_data, dict):
                     temperature = temp_data.get("gradi")
@@ -425,7 +476,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                         _LOGGER.warning("Failed to convert symbol_id '%s' to int for %s %02d:00: %s", symbol_id, date_str, ora, e)
 
                 forecast: Forecast = {
-                    ATTR_FORECAST_TIME: f"{date_str}T{ora:02d}:00:00",
+                    ATTR_FORECAST_TIME: forecast_time,
                     ATTR_FORECAST_CONDITION: condition,
                     ATTR_FORECAST_NATIVE_TEMP: temperature,
                     ATTR_FORECAST_PRECIPITATION_PROBABILITY: hourly.get("probabilita_prec"),
