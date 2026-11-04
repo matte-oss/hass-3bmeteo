@@ -5,6 +5,7 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -20,6 +21,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(
         self,
         hass: HomeAssistant,
+        config_entry: ConfigEntry,
         client: TrBMeteoApiClient,
         location_id: int,
         sector_id: int,
@@ -29,6 +31,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=f"{DOMAIN}_{location_name}",
             update_interval=timedelta(minutes=UPDATE_INTERVAL),
         )
@@ -59,7 +62,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             daily_data = await self._client.get_weather(self._location_id, self._sector_id)
             if "localita" not in daily_data:
                 raise UpdateFailed("Invalid response from API: missing localita")
-            
+
             # Fetch hourly forecast (2 days)
             try:
                 hourly_data = await self._client.get_hourly_forecast(
@@ -71,7 +74,7 @@ class TrBMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except TrBMeteoApiError as err:
                 _LOGGER.warning("Failed to fetch hourly forecast: %s", err)
                 daily_data["hourly_forecast"] = []
-            
+
             return daily_data
         except TrBMeteoApiError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err

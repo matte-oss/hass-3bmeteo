@@ -3,12 +3,19 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
 from .const import API_BASE_URL, API_KEY
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+REQUEST_HEADERS = {
+    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 13)",
+    "Accept-Encoding": "gzip,deflate",
+}
 
 
 class TrBMeteoApiError(Exception):
@@ -21,6 +28,43 @@ class TrBMeteoApiClient:
     def __init__(self, session: aiohttp.ClientSession) -> None:
         """Initialize the API client."""
         self._session = session
+
+    async def _request(self, path: str) -> Any:
+        """Perform a GET request and return the decoded JSON body.
+
+        Args:
+            path: Path below the API base URL
+
+        Returns:
+            The decoded JSON body
+
+        Raises:
+            TrBMeteoApiError: If the API request fails
+        """
+        url = f"{API_BASE_URL}/{path}"
+        params = {
+            "format": "json2",
+            "X-API-KEY": API_KEY,
+        }
+
+        try:
+            async with self._session.get(
+                url,
+                params=params,
+                headers=REQUEST_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+            ) as response:
+                if response.status != 200:
+                    raise TrBMeteoApiError(
+                        f"API request failed with status {response.status}"
+                    )
+                return await response.json()
+        except TimeoutError as err:
+            raise TrBMeteoApiError(f"Timeout connecting to API: {err}") from err
+        except aiohttp.ClientError as err:
+            raise TrBMeteoApiError(f"Error connecting to API: {err}") from err
+        except ValueError as err:
+            raise TrBMeteoApiError(f"Malformed JSON from API: {err}") from err
 
     async def get_weather(
         self, location_id: int, sector_id: int, language: str = "it"
@@ -38,33 +82,9 @@ class TrBMeteoApiClient:
         Raises:
             TrBMeteoApiError: If the API request fails
         """
-        url = (
-            f"{API_BASE_URL}/mobilev3/api_previsioni/home/"
-            f"{location_id}/{sector_id}/{language}/1/1"
+        return await self._request(
+            f"mobilev3/api_previsioni/home/{location_id}/{sector_id}/{language}/1/1"
         )
-        params = {
-            "format": "json2",
-            "X-API-KEY": API_KEY,
-        }
-        headers = {
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 13)",
-            "Accept-Encoding": "gzip,deflate",
-        }
-
-        try:
-            async with self._session.get(
-                url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status != 200:
-                    raise TrBMeteoApiError(
-                        f"API request failed with status {response.status}"
-                    )
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as err:
-            raise TrBMeteoApiError(f"Error connecting to API: {err}") from err
-        except Exception as err:
-            raise TrBMeteoApiError(f"Unexpected error: {err}") from err
 
     async def get_hourly_forecast(
         self, location_id: int, sector_id: int, language: str = "it", days: int = 2
@@ -83,35 +103,13 @@ class TrBMeteoApiClient:
         Raises:
             TrBMeteoApiError: If the API request fails
         """
-        url = (
-            f"{API_BASE_URL}/mobilev3/api_previsioni/orario/"
-            f"{location_id}/{sector_id}/0/{days}/{language}/"
+        return await self._request(
+            f"mobilev3/api_previsioni/orario/{location_id}/{sector_id}/0/{days}/{language}/"
         )
-        params = {
-            "format": "json2",
-            "X-API-KEY": API_KEY,
-        }
-        headers = {
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 13)",
-            "Accept-Encoding": "gzip,deflate",
-        }
 
-        try:
-            async with self._session.get(
-                url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status != 200:
-                    raise TrBMeteoApiError(
-                        f"API request failed with status {response.status}"
-                    )
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as err:
-            raise TrBMeteoApiError(f"Error connecting to API: {err}") from err
-        except Exception as err:
-            raise TrBMeteoApiError(f"Unexpected error: {err}") from err
-
-    async def search_location(self, query: str, language: str = "it") -> list[dict[str, Any]]:
+    async def search_location(
+        self, query: str, language: str = "it"
+    ) -> list[dict[str, Any]]:
         """Search for a location by name.
 
         Args:
@@ -125,38 +123,18 @@ class TrBMeteoApiClient:
             TrBMeteoApiError: If the API request fails
         """
         # Endpoint: /mobilev3/api_localita/ricerca_elastic_search/{query}/{lang}/{country}/offset/limit
-        url = (
-            f"{API_BASE_URL}/mobilev3/api_localita/ricerca_elastic_search/"
-            f"{query}/{language}/it/0/20"
+        data = await self._request(
+            f"mobilev3/api_localita/ricerca_elastic_search/"
+            f"{quote(query, safe='')}/{language}/it/0/20"
         )
-        params = {
-            "format": "json2",
-            "X-API-KEY": API_KEY,
-        }
-        headers = {
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 13)",
-            "Accept-Encoding": "gzip,deflate",
-        }
 
-        try:
-            async with self._session.get(
-                url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status != 200:
-                    raise TrBMeteoApiError(
-                        f"API request failed with status {response.status}"
-                    )
-                data = await response.json()
-                # Response format: {"localita": [...]}
-                if isinstance(data, dict) and "localita" in data:
-                    return data["localita"] if isinstance(data["localita"], list) else [data["localita"]]
-                elif isinstance(data, list):
-                    return data
-                return []
-        except aiohttp.ClientError as err:
-            raise TrBMeteoApiError(f"Error connecting to API: {err}") from err
-        except Exception as err:
-            raise TrBMeteoApiError(f"Unexpected error: {err}") from err
+        # Response format: {"localita": [...]}
+        if isinstance(data, dict) and "localita" in data:
+            localita = data["localita"]
+            return localita if isinstance(localita, list) else [localita]
+        if isinstance(data, list):
+            return data
+        return []
 
     async def validate_location(self, location_id: int, sector_id: int) -> bool:
         """Validate that a location exists and returns data.

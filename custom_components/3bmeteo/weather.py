@@ -1,7 +1,7 @@
 """Weather platform for 3BMeteo integration."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, tzinfo
 import logging
 from typing import Any
 
@@ -20,6 +20,7 @@ from homeassistant.components.weather import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
@@ -28,17 +29,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONDITION_MAP,
     CONF_LOCATION_ID,
     CONF_LOCATION_NAME,
+    CONF_TIMEZONE,
     DOMAIN,
     WIND_DIRECTION_MAP,
 )
 from .coordinator import TrBMeteoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Symbol IDs already reported as unmapped, so each is warned about only once.
+_REPORTED_SYMBOLS: set[int] = set()
 
 
 async def async_setup_entry(
@@ -48,8 +54,39 @@ async def async_setup_entry(
 ) -> None:
     """Set up 3BMeteo weather platform."""
     coordinator: TrBMeteoDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    
-    async_add_entities([TrBMeteoWeatherEntity(coordinator, config_entry)])
+
+    # 3BMeteo reports forecast times in the location's own local time. Resolve
+    # that zone once here. Entries created before the zone was stored fall back
+    # to the Home Assistant zone; the options flow lets the user set the right one.
+    location_timezone: tzinfo | None = None
+    tz_name = config_entry.options.get(
+        CONF_TIMEZONE, config_entry.data.get(CONF_TIMEZONE)
+    )
+    if tz_name:
+        location_timezone = await dt_util.async_get_time_zone(tz_name)
+        if location_timezone is None:
+            _LOGGER.warning(
+                "Unknown timezone %s for %s, falling back to the Home Assistant timezone",
+                tz_name,
+                config_entry.data.get(CONF_LOCATION_NAME),
+            )
+
+    if location_timezone is None:
+        _LOGGER.info(
+            "No time zone configured for %s: using the Home Assistant time zone. "
+            "Set one in the integration options if the location is elsewhere",
+            config_entry.data.get(CONF_LOCATION_NAME),
+        )
+
+    async_add_entities(
+        [
+            TrBMeteoWeatherEntity(
+                coordinator,
+                config_entry,
+                location_timezone or dt_util.get_default_time_zone(),
+            )
+        ]
+    )
 
 
 class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], WeatherEntity):
@@ -59,6 +96,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
     _attr_name = None
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_native_pressure_unit = UnitOfPressure.HPA
+    _attr_native_precipitation_unit = UnitOfPrecipitationDepth.MILLIMETERS
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
     _attr_supported_features = (
         WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
@@ -68,14 +106,16 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         self,
         coordinator: TrBMeteoDataUpdateCoordinator,
         config_entry: ConfigEntry,
+        location_timezone: tzinfo,
     ) -> None:
         """Initialize the weather entity."""
         super().__init__(coordinator)
-        
+
         self._config_entry = config_entry
         self._location_id = config_entry.data[CONF_LOCATION_ID]
         self._location_name = config_entry.data[CONF_LOCATION_NAME]
-        
+        self._location_timezone = location_timezone
+
         self._attr_unique_id = f"{DOMAIN}_{self._location_id}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._location_id))},
@@ -104,51 +144,66 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
     @property
     def _current_hourly(self) -> dict[str, Any] | None:
-        """Return current hourly data."""
-        from datetime import datetime
-        
+        """Return the hourly entry closest to the current time."""
         if not self.coordinator.data:
             return None
-            
+
         # Try to get hourly data from the dedicated hourly endpoint
         hourly_days = self.coordinator.data.get("hourly_forecast", [])
         if hourly_days:
-            now = datetime.now()
+            now = dt_util.now(self._location_timezone)
             current_date = now.strftime("%Y-%m-%d")
-            current_hour = now.hour
-            
+
             for day_data in hourly_days:
-                if day_data.get("data") == current_date:
-                    hourly_list = day_data.get("previsione_oraria", [])
-                    # Find the closest hour
-                    for hourly in hourly_list:
-                        if hourly.get("ora") == current_hour:
-                            return hourly
-                    # If exact hour not found, return the first one from today
-                    if hourly_list:
-                        return hourly_list[0]
-        
-        # Fallback to old method
+                if day_data.get("data") != current_date:
+                    continue
+
+                hourly_list = [
+                    hourly
+                    for hourly in day_data.get("previsione_oraria", [])
+                    if isinstance(hourly.get("ora"), int)
+                ]
+                if hourly_list:
+                    # Pick the nearest hour instead of assuming the exact one is
+                    # present: the API may drop hours that have already elapsed.
+                    return min(
+                        hourly_list,
+                        key=lambda h: abs(
+                            self._forecast_datetime(day_data["data"], h["ora"]) - now
+                        ),
+                    )
+
+        # Fallback to the hourly data embedded in the daily forecast
         forecast = self._current_forecast
-        if forecast and "previsione_oraria" in forecast:
-            hourly = forecast["previsione_oraria"]
-            if hourly:
-                return hourly[0]
+        if forecast and (hourly := forecast.get("previsione_oraria")):
+            return hourly[0]
         return None
 
     def _get_condition(self, symbol_id: int | None, is_night: bool = False) -> str | None:
         """Map 3bmeteo symbol ID to Home Assistant condition.
-        
+
         Args:
             symbol_id: The 3BMeteo weather symbol ID
             is_night: Whether it's nighttime (default: False)
-            
+
         Returns:
             Home Assistant weather condition string
         """
         if symbol_id is None:
             return None
-        condition = CONDITION_MAP.get(symbol_id, "cloudy")
+        condition = CONDITION_MAP.get(symbol_id)
+        if condition is None:
+            # Reporting an unmapped symbol as "cloudy" invents a forecast.
+            # Leave it unset so the UI shows unknown instead.
+            if symbol_id not in _REPORTED_SYMBOLS:
+                _REPORTED_SYMBOLS.add(symbol_id)
+                _LOGGER.warning(
+                    "Unmapped 3BMeteo weather symbol %s, please report it upstream",
+                    symbol_id,
+                )
+            else:
+                _LOGGER.debug("Unmapped 3BMeteo weather symbol %s", symbol_id)
+            return None
         # Return clear-night condition for clear skies during nighttime
         if condition == "sunny" and is_night:
             return "clear-night"
@@ -156,10 +211,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
     def _is_night(self, notte_value: int | str | None) -> bool:
         """Check if notte field indicates nighttime.
-        
+
         Args:
             notte_value: The notte field value from API (1 = night, 0 = day)
-            
+
         Returns:
             True if it's nighttime, False otherwise
         """
@@ -175,6 +230,24 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         if direction is None:
             return None
         return WIND_DIRECTION_MAP.get(direction.upper())
+
+    def _forecast_datetime(self, date_str: str, hour: int = 0) -> datetime | None:
+        """Build a timezone-aware datetime for a forecast entry.
+
+        Args:
+            date_str: Date as reported by the API (YYYY-MM-DD)
+            hour: Hour of the day in the location's local time
+
+        Returns:
+            Timezone-aware datetime, or None if the date is unusable
+        """
+        date = dt_util.parse_date(date_str)
+        if date is None:
+            _LOGGER.warning("Unparsable forecast date from API: %s", date_str)
+            return None
+        return datetime(
+            date.year, date.month, date.day, hour, tzinfo=self._location_timezone
+        )
 
     @property
     def condition(self) -> str | None:
@@ -193,7 +266,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     return condition
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int: %s", symbol_id, e)
-        
+
         # Fallback to daily forecast (do not use nighttime flag for daily forecast)
         forecast = self._current_forecast
         if forecast:
@@ -218,7 +291,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             if isinstance(temp_data, dict):
                 return temp_data.get("gradi")
             return temp_data
-        
+
         # Fallback to average of min/max
         forecast = self._current_forecast
         if forecast:
@@ -234,7 +307,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         """Return the apparent/feels-like temperature."""
         hourly = self._current_hourly
         if hourly:
-            return hourly.get("tpercepita") or hourly.get("windchill")
+            apparent = hourly.get("tpercepita")
+            if apparent is None:
+                apparent = hourly.get("windchill")
+            return apparent
         return None
 
     @property
@@ -248,7 +324,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     return int(hr)
                 except (ValueError, TypeError):
                     pass
-        
+
         # Fallback to daily
         forecast = self._current_forecast
         if forecast:
@@ -262,7 +338,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         hourly = self._current_hourly
         if hourly:
             return hourly.get("pr")
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -282,7 +358,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                         return float(intensita)
                     except (ValueError, TypeError):
                         pass
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -304,7 +380,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
             vento = hourly.get("vento", {})
             if vento:
                 return self._get_wind_bearing(vento.get("direzione"))
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -319,7 +395,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         hourly = self._current_hourly
         if hourly:
             return hourly.get("raffica")
-        
+
         forecast = self._current_forecast
         if forecast:
             tempo = forecast.get("tempo_medio", {})
@@ -336,7 +412,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         location = self._location_data
         if not location:
             return None
-        
+
         forecasts = location.get("previsione_giorno", [])
         if not forecasts:
             return None
@@ -345,13 +421,17 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         for day_forecast in forecasts:
             tempo = day_forecast.get("tempo_medio", {})
             data = day_forecast.get("data")
-            
+
             if not data:
+                continue
+
+            forecast_time = self._forecast_datetime(data)
+            if forecast_time is None:
                 continue
 
             vento = tempo.get("vento", {})
             symbol_id = tempo.get("id_simbolo")
-            
+
             condition = None
             if symbol_id:
                 try:
@@ -362,7 +442,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                     _LOGGER.warning("Failed to convert symbol_id '%s' to int for date %s: %s", symbol_id, data, e)
 
             forecast: Forecast = {
-                ATTR_FORECAST_TIME: f"{data}T00:00:00",
+                ATTR_FORECAST_TIME: forecast_time.isoformat(),
                 ATTR_FORECAST_CONDITION: condition,
                 ATTR_FORECAST_NATIVE_TEMP: tempo.get("t_max"),
                 ATTR_FORECAST_NATIVE_TEMP_LOW: tempo.get("t_min"),
@@ -391,16 +471,26 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
         # Get hourly forecasts from the dedicated hourly endpoint
         hourly_days = self.coordinator.data.get("hourly_forecast", [])
-        
+
         result: list[Forecast] = []
+
+        # The API returns whole days, including hours that have already passed.
+        # Home Assistant expects a forward-looking forecast, so drop those.
+        current_hour = dt_util.now(self._location_timezone).replace(
+            minute=0, second=0, microsecond=0
+        )
 
         for day_data in hourly_days:
             date_str = day_data.get("data", "")
             hourly_list = day_data.get("previsione_oraria", [])
-            
+
             for hourly in hourly_list:
                 ora = hourly.get("ora")
                 if ora is None:
+                    continue
+
+                forecast_time = self._forecast_datetime(date_str, ora)
+                if forecast_time is None or forecast_time < current_hour:
                     continue
 
                 temp_data = hourly.get("temperatura", {})
@@ -411,10 +501,10 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
 
                 vento = hourly.get("vento", {})
                 symbol_id = hourly.get("id_simbolo")
-                
+
                 # Check if it's nighttime
                 is_night = self._is_night(hourly.get("notte"))
-                
+
                 condition = None
                 if symbol_id:
                     try:
@@ -425,7 +515,7 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                         _LOGGER.warning("Failed to convert symbol_id '%s' to int for %s %02d:00: %s", symbol_id, date_str, ora, e)
 
                 forecast: Forecast = {
-                    ATTR_FORECAST_TIME: f"{date_str}T{ora:02d}:00:00",
+                    ATTR_FORECAST_TIME: forecast_time.isoformat(),
                     ATTR_FORECAST_CONDITION: condition,
                     ATTR_FORECAST_NATIVE_TEMP: temperature,
                     ATTR_FORECAST_PRECIPITATION_PROBABILITY: hourly.get("probabilita_prec"),

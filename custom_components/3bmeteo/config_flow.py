@@ -4,23 +4,29 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 
 from .api import TrBMeteoApiClient, TrBMeteoApiError
 from .const import (
     CONF_LOCATION_ID,
     CONF_LOCATION_NAME,
     CONF_SECTOR_ID,
+    CONF_TIMEZONE,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _async_valid_timezone(hass, tz_name: str | None) -> bool:
+    """Return True if tz_name is a known IANA time zone."""
+    return bool(tz_name) and await dt_util.async_get_time_zone(tz_name) is not None
 
 
 class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -32,33 +38,49 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._locations: list[dict[str, Any]] = []
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Return the options flow."""
+        return TrBMeteoOptionsFlow()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial step."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["search", "manual"],
+        )
+
+    async def async_step_search(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle location search by name."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             search_query = user_input.get("location_search", "").strip()
-            
+
             if search_query:
                 session = async_get_clientsession(self.hass)
                 client = TrBMeteoApiClient(session)
-                
+
                 try:
                     locations = await client.search_location(search_query)
                     if locations:
                         self._locations = locations
                         return await self.async_step_select_location()
-                    else:
-                        errors["base"] = "no_results"
+                    errors["base"] = "no_results"
                 except TrBMeteoApiError:
                     errors["base"] = "cannot_connect"
             else:
                 errors["base"] = "empty_search"
 
         return self.async_show_form(
-            step_id="user",
+            step_id="search",
             data_schema=vol.Schema(
                 {
                     vol.Required("location_search"): str,
@@ -79,12 +101,13 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected_idx = int(user_input["location"])
             selected = self._locations[selected_idx]
-            
+
             location_id = selected.get("id")
             sector_id = selected.get("id_settore", selected.get("id_macrosettore", 1))
             location_name = selected.get("localita", selected.get("nome", "Unknown"))
             province = selected.get("prov", "")
-            
+            timezone = selected.get("timezone")
+
             if province:
                 full_name = f"{location_name} ({province})"
             else:
@@ -109,6 +132,7 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_LOCATION_ID: location_id,
                             CONF_SECTOR_ID: sector_id,
                             CONF_LOCATION_NAME: full_name,
+                            CONF_TIMEZONE: timezone,
                         },
                     )
             except TrBMeteoApiError:
@@ -120,14 +144,14 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             name = loc.get("localita", loc.get("nome", "Unknown"))
             province = loc.get("prov", "")
             region = loc.get("regione", "")
-            
+
             if province and region:
                 label = f"{name} ({province}) - {region}"
             elif province:
                 label = f"{name} ({province})"
             else:
                 label = name
-            
+
             location_options[str(idx)] = label
 
         return self.async_show_form(
@@ -150,7 +174,12 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             location_id = user_input[CONF_LOCATION_ID]
             sector_id = user_input.get(CONF_SECTOR_ID, 1)
             location_name = user_input.get(CONF_LOCATION_NAME, f"Location {location_id}")
+            timezone = user_input[CONF_TIMEZONE]
 
+            if not await _async_valid_timezone(self.hass, timezone):
+                errors[CONF_TIMEZONE] = "invalid_timezone"
+
+        if user_input is not None and not errors:
             await self.async_set_unique_id(f"{location_id}_{sector_id}")
             self._abort_if_unique_id_configured()
 
@@ -168,6 +197,7 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_LOCATION_ID: location_id,
                             CONF_SECTOR_ID: sector_id,
                             CONF_LOCATION_NAME: location_name,
+                            CONF_TIMEZONE: timezone,
                         },
                     )
             except TrBMeteoApiError:
@@ -180,35 +210,41 @@ class TrBMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_LOCATION_ID): int,
                     vol.Optional(CONF_SECTOR_ID, default=1): int,
                     vol.Optional(CONF_LOCATION_NAME): str,
+                    vol.Required(
+                        CONF_TIMEZONE, default=self.hass.config.time_zone
+                    ): str,
                 }
             ),
             errors=errors,
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
-        """Get the options flow for this handler."""
-        return TrBMeteoOptionsFlowHandler(config_entry)
 
+class TrBMeteoOptionsFlow(config_entries.OptionsFlow):
+    """Let the user set the forecast location's time zone.
 
-class TrBMeteoOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for 3BMeteo."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    Needed for entries created before the time zone was stored (or without
+    one), so their forecast hours are not read in the Home Assistant zone.
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
+        current = self.config_entry.options.get(
+            CONF_TIMEZONE,
+            self.config_entry.data.get(CONF_TIMEZONE, self.hass.config.time_zone),
+        )
+
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            if await _async_valid_timezone(self.hass, user_input[CONF_TIMEZONE]):
+                return self.async_create_entry(data=user_input)
+            errors[CONF_TIMEZONE] = "invalid_timezone"
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema(
+                {vol.Required(CONF_TIMEZONE, default=current): str}
+            ),
+            errors=errors,
         )
