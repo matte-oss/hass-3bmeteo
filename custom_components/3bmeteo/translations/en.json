@@ -29,7 +29,8 @@
         "data": {
           "location_id": "Location ID",
           "sector_id": "Sector ID",
-          "location_name": "Location name"
+          "location_name": "Location name",
+          "timezone": "Location time zone"
         }
       }
     },
@@ -37,10 +38,25 @@
       "cannot_connect": "Failed to connect to 3BMeteo API",
       "invalid_location": "Invalid location ID",
       "no_results": "No locations found. Try a different search term.",
-      "empty_search": "Please enter a location name to search"
+      "empty_search": "Please enter a location name to search",
+      "invalid_timezone": "Unknown time zone. Use an IANA name such as Europe/Rome"
     },
     "abort": {
       "already_configured": "This location is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "description": "Time zone used to read the forecast hours of this location",
+        "data": {
+          "timezone": "Location time zone"
+        }
+      }
+    },
+    "error": {
+      "invalid_timezone": "Unknown time zone. Use an IANA name such as Europe/Rome"
     }
   }
 }

@@ -43,6 +43,9 @@ from .coordinator import TrBMeteoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Symbol IDs already reported as unmapped, so each is warned about only once.
+_REPORTED_SYMBOLS: set[int] = set()
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -53,10 +56,13 @@ async def async_setup_entry(
     coordinator: TrBMeteoDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
     # 3BMeteo reports forecast times in the location's own local time. Resolve
-    # that zone once here; fall back to the Home Assistant zone when the API
-    # did not report one (e.g. entries created through manual entry).
+    # that zone once here. Entries created before the zone was stored fall back
+    # to the Home Assistant zone; the options flow lets the user set the right one.
     location_timezone: tzinfo | None = None
-    if tz_name := config_entry.data.get(CONF_TIMEZONE):
+    tz_name = config_entry.options.get(
+        CONF_TIMEZONE, config_entry.data.get(CONF_TIMEZONE)
+    )
+    if tz_name:
         location_timezone = await dt_util.async_get_time_zone(tz_name)
         if location_timezone is None:
             _LOGGER.warning(
@@ -64,6 +70,13 @@ async def async_setup_entry(
                 tz_name,
                 config_entry.data.get(CONF_LOCATION_NAME),
             )
+
+    if location_timezone is None:
+        _LOGGER.info(
+            "No time zone configured for %s: using the Home Assistant time zone. "
+            "Set one in the integration options if the location is elsewhere",
+            config_entry.data.get(CONF_LOCATION_NAME),
+        )
 
     async_add_entities(
         [
@@ -153,7 +166,12 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
                 if hourly_list:
                     # Pick the nearest hour instead of assuming the exact one is
                     # present: the API may drop hours that have already elapsed.
-                    return min(hourly_list, key=lambda h: abs(h["ora"] - now.hour))
+                    return min(
+                        hourly_list,
+                        key=lambda h: abs(
+                            self._forecast_datetime(day_data["data"], h["ora"]) - now
+                        ),
+                    )
 
         # Fallback to the hourly data embedded in the daily forecast
         forecast = self._current_forecast
@@ -177,10 +195,14 @@ class TrBMeteoWeatherEntity(CoordinatorEntity[TrBMeteoDataUpdateCoordinator], We
         if condition is None:
             # Reporting an unmapped symbol as "cloudy" invents a forecast.
             # Leave it unset so the UI shows unknown instead.
-            _LOGGER.warning(
-                "Unmapped 3BMeteo weather symbol %s, please report it upstream",
-                symbol_id,
-            )
+            if symbol_id not in _REPORTED_SYMBOLS:
+                _REPORTED_SYMBOLS.add(symbol_id)
+                _LOGGER.warning(
+                    "Unmapped 3BMeteo weather symbol %s, please report it upstream",
+                    symbol_id,
+                )
+            else:
+                _LOGGER.debug("Unmapped 3BMeteo weather symbol %s", symbol_id)
             return None
         # Return clear-night condition for clear skies during nighttime
         if condition == "sunny" and is_night:

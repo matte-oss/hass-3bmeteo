@@ -29,7 +29,8 @@
         "data": {
           "location_id": "ID Località",
           "sector_id": "ID Settore",
-          "location_name": "Nome località"
+          "location_name": "Nome località",
+          "timezone": "Fuso orario della località"
         }
       }
     },
@@ -37,10 +38,25 @@
       "cannot_connect": "Impossibile connettersi all'API di 3BMeteo",
       "invalid_location": "ID località non valido",
       "no_results": "Nessuna località trovata. Prova con un termine diverso.",
-      "empty_search": "Inserisci un nome di località da cercare"
+      "empty_search": "Inserisci un nome di località da cercare",
+      "invalid_timezone": "Fuso orario sconosciuto. Usa un nome IANA come Europe/Rome"
     },
     "abort": {
       "already_configured": "Questa località è già configurata"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni",
+        "description": "Fuso orario usato per leggere gli orari della previsione di questa località",
+        "data": {
+          "timezone": "Fuso orario della località"
+        }
+      }
+    },
+    "error": {
+      "invalid_timezone": "Fuso orario sconosciuto. Usa un nome IANA come Europe/Rome"
     }
   }
 }

@@ -4,7 +4,7 @@
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/matte-oss/hass-3bmeteo/",
-  "homeassistant": "2023.9.0",
+  "homeassistant": "2024.11.0",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/matte-oss/hass-3bmeteo/issues",
   "requirements": [],
